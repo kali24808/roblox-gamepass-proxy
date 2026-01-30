@@ -8,29 +8,29 @@ app.get("/gamepasses/:userId", async (req, res) => {
   const userId = req.params.userId;
 
   try {
-    // 1️⃣ Get games OWNED by the user
-    const gamesRes = await fetch(
+    // 1) Get games OWNED by the player (NOT group games)
+    const gamesResponse = await fetch(
       `https://games.roblox.com/v2/users/${userId}/games?accessFilter=2&limit=50`
     );
-    const gamesJson = await gamesRes.json();
+    const gamesData = await gamesResponse.json();
 
-    if (!gamesJson.data) {
+    if (!gamesData || !gamesData.data) {
       return res.json([]);
     }
 
-    let passes = [];
+    let gamepasses = [];
 
-    // 2️⃣ Get gamepasses from each game
-    for (const game of gamesJson.data) {
-      const passesRes = await fetch(
+    // 2) For each owned game, fetch its gamepasses
+    for (const game of gamesData.data) {
+      const passesResponse = await fetch(
         `https://games.roblox.com/v1/games/${game.id}/game-passes?limit=100`
       );
-      const passesJson = await passesRes.json();
+      const passesData = await passesResponse.json();
 
-      if (passesJson.data) {
-        for (const pass of passesJson.data) {
+      if (passesData && passesData.data) {
+        for (const pass of passesData.data) {
           if (pass.price && pass.price > 0) {
-            passes.push({
+            gamepasses.push({
               id: pass.id,
               name: pass.displayName,
               price: pass.price
@@ -40,9 +40,9 @@ app.get("/gamepasses/:userId", async (req, res) => {
       }
     }
 
-    res.json(passes);
-  } catch (err) {
-    console.error(err);
+    res.json(gamepasses);
+  } catch (error) {
+    console.error("Proxy error:", error);
     res.status(500).json([]);
   }
 });
