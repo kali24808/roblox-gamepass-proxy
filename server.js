@@ -6,46 +6,37 @@ const PORT = process.env.PORT || 3000;
 
 app.get("/gamepasses/:userId", async (req, res) => {
   const userId = req.params.userId;
-  const gamepasses = [];
 
   try {
-    // 1️⃣ Get user's owned games
-    const gamesRes = await fetch(
-      `https://games.roblox.com/v2/users/${userId}/games?limit=50&sortOrder=Asc`
-    );
-    const games = await gamesRes.json();
+    const url =
+      "https://catalog.roblox.com/v1/search/items/details" +
+      "?CreatorTargetId=" + userId +
+      "&AssetTypes=34" +
+      "&IncludeNotForSale=false" +
+      "&Limit=50";
 
-    if (!games.data) {
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (!data.data) {
       return res.json([]);
     }
 
-    // 2️⃣ Get gamepasses for each game
-    for (const game of games.data) {
-      const passRes = await fetch(
-        `https://games.roblox.com/v1/games/${game.id}/game-passes?limit=100`
-      );
-      const passData = await passRes.json();
+    const passes = data.data
+      .filter(item => item.price && item.price > 0)
+      .map(item => ({
+        id: item.id,
+        name: item.name,
+        price: item.price
+      }));
 
-      if (!passData.data) continue;
-
-      for (const pass of passData.data) {
-        if (pass.price && pass.price > 0) {
-          gamepasses.push({
-            id: pass.id,
-            name: pass.displayName,
-            price: pass.price
-          });
-        }
-      }
-    }
-
-    res.json(gamepasses);
+    res.json(passes);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Failed to fetch gamepasses" });
+    res.status(500).json([]);
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`Proxy running on port ${PORT}`);
+  console.log("Gamepass proxy running on port", PORT);
 });
