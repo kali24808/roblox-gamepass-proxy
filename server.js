@@ -8,13 +8,15 @@ app.get("/gamepasses/:userId", async (req, res) => {
   const userId = req.params.userId;
 
   try {
-    // 1️⃣ Get USER-OWNED public games
+    // 1️⃣ Get games OWNED by the user
     const gamesRes = await fetch(
       `https://games.roblox.com/v2/users/${userId}/games?accessFilter=2&limit=50`
     );
     const gamesJson = await gamesRes.json();
 
-    if (!gamesJson.data) return res.json([]);
+    if (!gamesJson.data) {
+      return res.json([]);
+    }
 
     let passes = [];
 
@@ -46,5 +48,5 @@ app.get("/gamepasses/:userId", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log("✅ User gamepass proxy running on port", PORT);
+  console.log("✅ Gamepass proxy running on port", PORT);
 });
