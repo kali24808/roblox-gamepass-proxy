@@ -4,34 +4,50 @@ import fetch from "node-fetch";
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-/**
- * GET /gamepasses/:userId
- * Returns ALL gamepasses created by games owned by the user
- */
 app.get("/gamepasses/:userId", async (req, res) => {
   const userId = req.params.userId;
 
+  let debug = {
+    userId,
+    gamesFetched: false,
+    gamesCount: 0,
+    gameIds: [],
+    passesPerGame: {},
+    totalPasses: 0,
+    errors: []
+  };
+
   try {
-    // 1️⃣ Get games created by the user
-    const gamesRes = await fetch(
-      `https://games.roblox.com/v2/users/${userId}/games?accessFilter=2&limit=50`
-    );
+    // STEP 1: Fetch user's games
+    const gamesUrl =
+      `https://games.roblox.com/v2/users/${userId}/games?accessFilter=2&limit=50`;
+
+    const gamesRes = await fetch(gamesUrl);
     const gamesJson = await gamesRes.json();
 
+    debug.gamesFetched = true;
+
     if (!gamesJson.data) {
-      return res.json([]);
+      debug.errors.push("No gamesJson.data");
+      return res.json({ debug, passes: [] });
     }
 
+    debug.gamesCount = gamesJson.data.length;
+
+    // STEP 2: For each game, fetch gamepasses
     let passes = [];
 
-    // 2️⃣ For each game, fetch its gamepasses
     for (const game of gamesJson.data) {
-      const gameId = game.id;
+      debug.gameIds.push(game.id);
 
-      const passRes = await fetch(
-        `https://games.roblox.com/v1/games/${gameId}/game-passes?limit=100`
-      );
+      const passUrl =
+        `https://games.roblox.com/v1/games/${game.id}/game-passes?limit=100`;
+
+      const passRes = await fetch(passUrl);
       const passJson = await passRes.json();
+
+      debug.passesPerGame[game.id] =
+        passJson.data ? passJson.data.length : 0;
 
       if (!passJson.data) continue;
 
@@ -41,19 +57,21 @@ app.get("/gamepasses/:userId", async (req, res) => {
             id: pass.id,
             name: pass.displayName,
             price: pass.price,
-            gameId: gameId
+            gameId: game.id
           });
         }
       }
     }
 
-    res.json(passes);
+    debug.totalPasses = passes.length;
+
+    res.json({ debug, passes });
   } catch (err) {
-    console.error("Proxy error:", err);
-    res.status(500).json([]);
+    debug.errors.push(err.message);
+    res.status(500).json({ debug, passes: [] });
   }
 });
 
 app.listen(PORT, () => {
-  console.log("✅ Gamepass proxy running on port", PORT);
+  console.log("🧪 DEBUG proxy running on port", PORT);
 });
