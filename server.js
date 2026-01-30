@@ -4,31 +4,56 @@ import fetch from "node-fetch";
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Helper: fetch JSON safely
+async function fetchJson(url) {
+  const res = await fetch(url);
+  return await res.json();
+}
+
 app.get("/gamepasses/:userId", async (req, res) => {
   const userId = req.params.userId;
 
   try {
-    // 1) Get games OWNED by the player (NOT group games)
-    const gamesResponse = await fetch(
+    let allGames = [];
+
+    // 1️⃣ Player-owned games
+    const userGames = await fetchJson(
       `https://games.roblox.com/v2/users/${userId}/games?accessFilter=2&limit=50`
     );
-    const gamesData = await gamesResponse.json();
 
-    if (!gamesData || !gamesData.data) {
-      return res.json([]);
+    if (userGames?.data) {
+      allGames.push(...userGames.data);
+    }
+
+    // 2️⃣ Group games where user is the CREATOR
+    const groups = await fetchJson(
+      `https://groups.roblox.com/v2/users/${userId}/groups/roles`
+    );
+
+    if (groups?.data) {
+      for (const group of groups.data) {
+        if (group.role.rank === 255) {
+          const groupGames = await fetchJson(
+            `https://games.roblox.com/v2/groups/${group.group.id}/games?limit=50`
+          );
+
+          if (groupGames?.data) {
+            allGames.push(...groupGames.data);
+          }
+        }
+      }
     }
 
     let gamepasses = [];
 
-    // 2) For each owned game, fetch its gamepasses
-    for (const game of gamesData.data) {
-      const passesResponse = await fetch(
+    // 3️⃣ Get gamepasses from each game
+    for (const game of allGames) {
+      const passes = await fetchJson(
         `https://games.roblox.com/v1/games/${game.id}/game-passes?limit=100`
       );
-      const passesData = await passesResponse.json();
 
-      if (passesData && passesData.data) {
-        for (const pass of passesData.data) {
+      if (passes?.data) {
+        for (const pass of passes.data) {
           if (pass.price && pass.price > 0) {
             gamepasses.push({
               id: pass.id,
@@ -41,8 +66,8 @@ app.get("/gamepasses/:userId", async (req, res) => {
     }
 
     res.json(gamepasses);
-  } catch (error) {
-    console.error("Proxy error:", error);
+  } catch (err) {
+    console.error("Proxy error:", err);
     res.status(500).json([]);
   }
 });
