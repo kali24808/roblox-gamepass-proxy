@@ -11,18 +11,19 @@ app.get("/gamepasses/:userId", async (req, res) => {
     const url =
       "https://catalog.roblox.com/v1/search/items/details" +
       "?CreatorTargetId=" + userId +
-      "&AssetTypes=34" +
+      "&CreatorType=User" +          // 🔥 REQUIRED
+      "&AssetTypes=34" +             // Gamepass
       "&IncludeNotForSale=false" +
       "&Limit=30";
 
     const response = await fetch(url);
-    const data = await response.json();
+    const json = await response.json();
 
-    if (!data.data) {
+    if (!json.data) {
       return res.json([]);
     }
 
-    const passes = data.data
+    const passes = json.data
       .filter(item => item.price && item.price > 0)
       .map(item => ({
         id: item.id,
