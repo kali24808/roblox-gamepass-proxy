@@ -4,68 +4,34 @@ import fetch from "node-fetch";
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Helper: fetch JSON safely
-async function fetchJson(url) {
-  const res = await fetch(url);
-  return await res.json();
-}
-
 app.get("/gamepasses/:userId", async (req, res) => {
   const userId = req.params.userId;
 
   try {
-    let allGames = [];
+    const url =
+      "https://catalog.roblox.com/v1/search/items/details" +
+      "?CreatorTargetId=" + userId +
+      "&CreatorType=User" +        // 🔥 THIS IS CRITICAL
+      "&AssetTypes=34" +           // Gamepasses ONLY
+      "&IncludeNotForSale=false" +
+      "&Limit=50";
 
-    // 1️⃣ Player-owned games
-    const userGames = await fetchJson(
-      `https://games.roblox.com/v2/users/${userId}/games?accessFilter=2&limit=50`
-    );
+    const response = await fetch(url);
+    const json = await response.json();
 
-    if (userGames?.data) {
-      allGames.push(...userGames.data);
+    if (!json.data) {
+      return res.json([]);
     }
 
-    // 2️⃣ Group games where user is the CREATOR
-    const groups = await fetchJson(
-      `https://groups.roblox.com/v2/users/${userId}/groups/roles`
-    );
+    const passes = json.data
+      .filter(item => item.price && item.price > 0)
+      .map(item => ({
+        id: item.id,
+        name: item.name,
+        price: item.price
+      }));
 
-    if (groups?.data) {
-      for (const group of groups.data) {
-        if (group.role.rank === 255) {
-          const groupGames = await fetchJson(
-            `https://games.roblox.com/v2/groups/${group.group.id}/games?limit=50`
-          );
-
-          if (groupGames?.data) {
-            allGames.push(...groupGames.data);
-          }
-        }
-      }
-    }
-
-    let gamepasses = [];
-
-    // 3️⃣ Get gamepasses from each game
-    for (const game of allGames) {
-      const passes = await fetchJson(
-        `https://games.roblox.com/v1/games/${game.id}/game-passes?limit=100`
-      );
-
-      if (passes?.data) {
-        for (const pass of passes.data) {
-          if (pass.price && pass.price > 0) {
-            gamepasses.push({
-              id: pass.id,
-              name: pass.displayName,
-              price: pass.price
-            });
-          }
-        }
-      }
-    }
-
-    res.json(gamepasses);
+    res.json(passes);
   } catch (err) {
     console.error("Proxy error:", err);
     res.status(500).json([]);
