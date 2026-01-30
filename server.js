@@ -40,3 +40,4 @@ app.get("/gamepasses/:userId", async (req, res) => {
 app.listen(PORT, () => {
   console.log("Gamepass proxy running on port", PORT);
 });
+
