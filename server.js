@@ -4,46 +4,50 @@ import fetch from "node-fetch";
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-async function fetchGamepasses(userId) {
-  const url =
-    "https://catalog.roblox.com/v1/search/items/details" +
-    "?CreatorTargetId=" + userId +
-    "&CreatorType=User" +
-    "&AssetTypes=34" +
-    "&IncludeNotForSale=false" +
-    "&Limit=50";
-
-  const response = await fetch(url, {
+async function fetchJSON(url) {
+  const res = await fetch(url, {
     headers: {
-      "Cache-Control": "no-cache",
-      "Pragma": "no-cache",
-      "User-Agent": "Roblox-Gamepass-Proxy"
+      "User-Agent": "Roblox-Gamepass-Proxy",
+      "Cache-Control": "no-cache"
     }
   });
-
-  const json = await response.json();
-  return json.data || [];
+  return res.json();
 }
 
 app.get("/gamepasses/:userId", async (req, res) => {
   const userId = req.params.userId;
 
   try {
-    let data = await fetchGamepasses(userId);
+    // 1️⃣ get games created by user
+    const gamesUrl =
+      `https://games.roblox.com/v2/users/${userId}/games?limit=50&sortOrder=Asc`;
 
-    // 🔁 retry once if Roblox returns empty
-    if (data.length === 0) {
-      await new Promise(r => setTimeout(r, 500));
-      data = await fetchGamepasses(userId);
+    const gamesJson = await fetchJSON(gamesUrl);
+    if (!gamesJson.data) return res.json([]);
+
+    let passes = [];
+
+    // 2️⃣ get gamepasses for each game
+    for (const game of gamesJson.data) {
+      const gameId = game.id;
+
+      const passesUrl =
+        `https://games.roblox.com/v1/games/${gameId}/game-passes?limit=100&sortOrder=Asc`;
+
+      const passJson = await fetchJSON(passesUrl);
+
+      if (passJson.data) {
+        for (const pass of passJson.data) {
+          if (pass.price && pass.price > 0) {
+            passes.push({
+              id: pass.id,
+              name: pass.displayName,
+              price: pass.price
+            });
+          }
+        }
+      }
     }
-
-    const passes = data
-      .filter(item => item.price && item.price > 0)
-      .map(item => ({
-        id: item.id,
-        name: item.name,
-        price: item.price
-      }));
 
     res.json(passes);
   } catch (err) {
