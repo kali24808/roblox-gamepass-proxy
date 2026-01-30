@@ -4,26 +4,40 @@ import fetch from "node-fetch";
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+async function fetchGamepasses(userId) {
+  const url =
+    "https://catalog.roblox.com/v1/search/items/details" +
+    "?CreatorTargetId=" + userId +
+    "&CreatorType=User" +
+    "&AssetTypes=34" +
+    "&IncludeNotForSale=false" +
+    "&Limit=50";
+
+  const response = await fetch(url, {
+    headers: {
+      "Cache-Control": "no-cache",
+      "Pragma": "no-cache",
+      "User-Agent": "Roblox-Gamepass-Proxy"
+    }
+  });
+
+  const json = await response.json();
+  return json.data || [];
+}
+
 app.get("/gamepasses/:userId", async (req, res) => {
   const userId = req.params.userId;
 
   try {
-    const url =
-      "https://catalog.roblox.com/v1/search/items/details" +
-      "?CreatorTargetId=" + userId +
-      "&CreatorType=User" +        // 🔥 THIS IS CRITICAL
-      "&AssetTypes=34" +           // Gamepasses ONLY
-      "&IncludeNotForSale=false" +
-      "&Limit=50";
+    let data = await fetchGamepasses(userId);
 
-    const response = await fetch(url);
-    const json = await response.json();
-
-    if (!json.data) {
-      return res.json([]);
+    // 🔁 retry once if Roblox returns empty
+    if (data.length === 0) {
+      await new Promise(r => setTimeout(r, 500));
+      data = await fetchGamepasses(userId);
     }
 
-    const passes = json.data
+    const passes = data
       .filter(item => item.price && item.price > 0)
       .map(item => ({
         id: item.id,
@@ -34,7 +48,7 @@ app.get("/gamepasses/:userId", async (req, res) => {
     res.json(passes);
   } catch (err) {
     console.error("Proxy error:", err);
-    res.status(500).json([]);
+    res.json([]);
   }
 });
 
