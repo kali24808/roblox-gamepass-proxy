@@ -4,46 +4,67 @@ import fetch from "node-fetch";
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.get("/gamepasses/:creatorId", async (req, res) => {
-  const creatorId = req.params.creatorId;
+const HEADERS = {
+  "User-Agent": "Mozilla/5.0 RobloxProxy",
+  "Accept": "application/json"
+};
+
+app.get("/gamepasses/:userId", async (req, res) => {
+  const userId = req.params.userId;
+
+  const debug = {
+    userId,
+    requestUrl: "",
+    rawCount: 0,
+    returnedCount: 0,
+    rawIds: []
+  };
 
   try {
     const url =
       "https://catalog.roblox.com/v1/search/items/details" +
-      "?CreatorTargetId=" + creatorId +
-      "&CreatorType=User" +       // IMPORTANT
-      "&AssetTypes=34" +          // Gamepass
-      "&IncludeNotForSale=false" +
+      "?CreatorTargetId=" + userId +
+      "&CreatorType=User" +
+      "&AssetTypes=34" +          // GamePass
+      "&IncludeNotForSale=true" + // important
       "&Limit=50";
 
-    const response = await fetch(url, {
-      headers: {
-        "User-Agent": "Roblox/WinInet",
-        "Accept": "application/json"
-      }
-    });
+    debug.requestUrl = url;
 
+    const response = await fetch(url, { headers: HEADERS });
     const json = await response.json();
 
     if (!json.data) {
-      return res.json([]);
+      return res.json({ debug, passes: [] });
     }
 
+    debug.rawCount = json.data.length;
+    debug.rawIds = json.data.map(i => i.id);
+
     const passes = json.data
-      .filter(p => p.price && p.price > 0)
-      .map(p => ({
-        id: p.id,
-        name: p.name,
-        price: p.price
+      .filter(item => typeof item.price === "number" && item.price > 0)
+      .map(item => ({
+        id: item.id,
+        name: item.name,
+        price: item.price
       }));
 
-    res.json(passes);
+    debug.returnedCount = passes.length;
+
+    res.json({
+      debug,
+      passes
+    });
+
   } catch (err) {
     console.error(err);
-    res.status(500).json([]);
+    res.status(500).json({
+      error: "Proxy error",
+      debug
+    });
   }
 });
 
 app.listen(PORT, () => {
-  console.log("✅ Gamepass proxy running on port", PORT);
+  console.log("✅ User gamepass proxy running on port", PORT);
 });
