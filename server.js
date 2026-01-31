@@ -4,67 +4,67 @@ import fetch from "node-fetch";
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const HEADERS = {
-  "User-Agent": "Mozilla/5.0 RobloxProxy",
-  "Accept": "application/json"
-};
+async function safeFetch(url) {
+  console.log("FETCH:", url);
+  const res = await fetch(url);
+  if (!res.ok) {
+    console.error("FAILED:", res.status);
+    return null;
+  }
+  return res.json();
+}
 
 app.get("/gamepasses/:userId", async (req, res) => {
   const userId = req.params.userId;
-
-  const debug = {
-    userId,
-    requestUrl: "",
-    rawCount: 0,
-    returnedCount: 0,
-    rawIds: []
-  };
+  console.log("REQUEST USER:", userId);
 
   try {
-    const url =
-      "https://catalog.roblox.com/v1/search/items/details" +
-      "?CreatorTargetId=" + userId +
-      "&CreatorType=User" +
-      "&AssetTypes=34" +          // GamePass
-      "&IncludeNotForSale=true" + // important
-      "&Limit=50";
+    // 1️⃣ Get games created by user
+    const games = await safeFetch(
+      `https://games.roblox.com/v2/users/${userId}/games?accessFilter=Public&limit=50`
+    );
 
-    debug.requestUrl = url;
-
-    const response = await fetch(url, { headers: HEADERS });
-    const json = await response.json();
-
-    if (!json.data) {
-      return res.json({ debug, passes: [] });
+    if (!games || !games.data || games.data.length === 0) {
+      console.log("NO GAMES FOUND");
+      return res.json([]);
     }
 
-    debug.rawCount = json.data.length;
-    debug.rawIds = json.data.map(i => i.id);
+    let passes = [];
 
-    const passes = json.data
-      .filter(item => typeof item.price === "number" && item.price > 0)
-      .map(item => ({
-        id: item.id,
-        name: item.name,
-        price: item.price
-      }));
+    // 2️⃣ For each game, fetch gamepasses
+    for (const game of games.data) {
+      console.log("GAME:", game.name, game.id);
 
-    debug.returnedCount = passes.length;
+      const gp = await safeFetch(
+        `https://games.roblox.com/v1/games/${game.id}/game-passes?limit=100`
+      );
 
-    res.json({
-      debug,
-      passes
-    });
+      if (!gp || !gp.data) {
+        console.log("NO PASSES FOR GAME:", game.id);
+        continue;
+      }
+
+      for (const pass of gp.data) {
+        if (pass.price && pass.price > 0) {
+          console.log("PASS:", pass.name, pass.price);
+          passes.push({
+            id: pass.id,
+            name: pass.displayName,
+            price: pass.price
+          });
+        }
+      }
+    }
+
+    console.log("TOTAL PASSES:", passes.length);
+    res.json(passes);
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({
-      error: "Proxy error",
-      debug
-    });
+    console.error("SERVER ERROR:", err);
+    res.status(500).json([]);
   }
 });
 
 app.listen(PORT, () => {
-  console.log("✅ User gamepass proxy running on port", PORT);
+  console.log("Gamepass proxy DEBUG running on port", PORT);
 });
