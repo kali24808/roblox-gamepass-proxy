@@ -57,7 +57,7 @@ app.get("/gamepasses/:userId", async (req, res) => {
     }
 
     console.log("TOTAL PASSES:", passes.length);
-    res.json(passes);
+    res.json({ passes });
 
   } catch (err) {
     console.error("SERVER ERROR:", err);
